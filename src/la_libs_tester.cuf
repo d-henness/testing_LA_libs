@@ -1,0 +1,78 @@
+program la_libs_tester
+  use cusolver_interfaces
+  use cudafor
+  implicit none
+  integer ::  istat, i, n, n1, n2, lda, ldb, lwork, info
+  real(kind = 8), allocatable ::  a(:, :), b(:, :)
+  real(kind = 8), allocatable ::  work(:), eigenval(:)
+  character ::  formt*30
+
+  open(unit=1, file='a_matrix.txt', status='old')
+  open(unit=2, file='b_matrix.txt', status='old')
+  read(1, *)n1
+  read(2, *)n2
+  if(n1 .ne. n2) then
+    write(6, *)'Dimensions of a and b are not equal'
+    stop
+  endif
+  n = n1
+
+  write(formt, fmt='("(",i0,"(g25.16))")')n
+
+  allocate(a(n, n), stat = istat)
+  if(istat .ne. 0) then
+    write(6, *)'Error allocating a'
+    stop
+  endif
+  allocate(b(n, n), stat = istat)
+  if(istat .ne. 0) then
+    write(6, *)'Error allocating a'
+    stop
+  endif
+  allocate(eigenval(n), stat = istat)
+  if(istat .ne. 0) then
+    write(6, *)'Error allocating eigenval'
+    stop
+  endif
+
+  do i = 1, n
+    read(1, fmt=formt)a(1:n, i)
+  enddo
+  do i = 1, n
+    read(2, fmt=formt)b(1:n, i)
+  enddo
+
+  close(1)
+  close(2)
+
+  lwork = -1
+
+  allocate(work(1), stat = istat)
+  if(istat .ne. 0) then
+    write(6, *)'Error allocating work'
+    stop
+  endif
+
+  call dsygv(1, 'v', 'l', n, a, n, b, n, eigenval, work, lwork, info)
+  lwork = work(1)
+  deallocate(work, stat = istat)
+  if(istat .ne. 0) then
+    write(6, *)'Error deallocating work'
+    stop
+  endif
+  allocate(work(lwork), stat = istat)
+  if(istat .ne. 0) then
+    write(6, *)'Error allocating work'
+    stop
+  endif
+
+  call dsygv(1, 'v', 'l', n, a, n, b, n, eigenval, work, lwork, info)
+
+  do i = 1, n
+    write(6, fmt = '(g25.16)')eigenval(i)
+  enddo
+  
+
+
+end program la_libs_tester
+
