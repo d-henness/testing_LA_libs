@@ -140,10 +140,10 @@ program la_libs_tester
 
   eigenval_gpu = d_eigenval
 
-  write(6, fmt='(4(a36))')'cpu','gpu','diff (cpu - gpu)', 'rel error (abs(cpu - gpu)/abs(cpu))'
+  write(6, fmt='(4(a36))')'cpu','gpu','diff (cpu - gpu)', 'rel error (abs((cpu - gpu)/cpu))'
   do i = 1, n
     write(6, fmt = '(2(g36.16), 2(g25.3))')eigenval_cpu(i), eigenval_gpu(i), eigenval_cpu(i) - eigenval_gpu(i), &
-      abs(eigenval_cpu(i) - eigenval_gpu(i))/abs(eigenval_cpu(i))
+      abs((eigenval_cpu(i) - eigenval_gpu(i))/eigenval_cpu(i))
   enddo
   
 
