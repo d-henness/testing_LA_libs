@@ -1,0 +1,4 @@
+pgfortran datatypes.f90 cuSOLVER_interfaces.cuf gpu_kernals.cuf dfratomgpu.sygvd.cuf -Mcudalib=cublas -lblas -L$CUDA_HOME/lib64 -lcusolver_static -o dfratomgpu.sygvd.x -Mcuda=ptxinfo,cc20
+
+pgfortran gpualg2.cuf dfratom.blas+lapck.f -L/opt/pgi/linux86-64/16.9/lib -lblas -llapack -o test.x
+

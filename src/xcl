@@ -1,0 +1,1 @@
+pgfortran cuSOLVER_interfaces.cuf la_libs_tester.cuf -L/opt/pgi/linux86-64/16.9/lib -llapack -L /usr/local/cuda/lib64 -lcusolver_static -o la_libs_tester.x

@@ -2,10 +2,16 @@ program la_libs_tester
   use cusolver_interfaces
   use cudafor
   implicit none
-  integer ::  istat, i, n, n1, n2, lda, ldb, lwork, info
+  integer ::  istat, i, n, n1, n2, lwork, info
   real(kind = 8), allocatable ::  a(:, :), b(:, :)
-  real(kind = 8), allocatable ::  work(:), eigenval(:)
+  real(kind = 8), allocatable ::  work(:), eigenval_cpu(:), eigenval_gpu(:)
+  real(kind = 8), device, allocatable ::  d_a(:, :), d_b(:, :)
+  real(kind = 8), device, allocatable ::  d_work(:), d_eigenval(:)
+  integer, device, target ::  d_devinfo
+  type(c_devptr), device  ::  d_devinfo_ptr
+  type(c_ptr) ::  cusolver_hndl
   character ::  formt*30
+
 
   open(unit=1, file='a_matrix.txt', status='old')
   open(unit=2, file='b_matrix.txt', status='old')
@@ -19,6 +25,8 @@ program la_libs_tester
 
   write(formt, fmt='("(",i0,"(g25.16))")')n
 
+  ! Allocating cpu memory
+
   allocate(a(n, n), stat = istat)
   if(istat .ne. 0) then
     write(6, *)'Error allocating a'
@@ -26,15 +34,40 @@ program la_libs_tester
   endif
   allocate(b(n, n), stat = istat)
   if(istat .ne. 0) then
-    write(6, *)'Error allocating a'
+    write(6, *)'Error allocating b'
     stop
   endif
-  allocate(eigenval(n), stat = istat)
+  allocate(eigenval_cpu(n), stat = istat)
   if(istat .ne. 0) then
-    write(6, *)'Error allocating eigenval'
+    write(6, *)'Error allocating eigenval_cpu'
+    stop
+  endif
+  allocate(eigenval_gpu(n), stat = istat)
+  if(istat .ne. 0) then
+    write(6, *)'Error allocating eigenval_gpu'
     stop
   endif
 
+  ! Allocating gpu memory
+
+  allocate(d_a(n, n), stat = istat)
+  if(istat .ne. 0) then
+    write(6, *)'Error allocating d_a'
+    stop
+  endif
+  allocate(d_b(n, n), stat = istat)
+  if(istat .ne. 0) then
+    write(6, *)'Error allocating d_b'
+    stop
+  endif
+  allocate(d_eigenval(n), stat = istat)
+  if(istat .ne. 0) then
+    write(6, *)'Error allocating d_eigenval'
+    stop
+  endif
+
+
+  ! Reading matrices
   do i = 1, n
     read(1, fmt=formt)a(1:n, i)
   enddo
@@ -45,15 +78,20 @@ program la_libs_tester
   close(1)
   close(2)
 
-  lwork = -1
+  ! Uploading gpu memory
 
+  d_a = a
+  d_b = b
+
+  ! Compute eigenvalues/vectors using LAPACK
+
+  lwork = -1
   allocate(work(1), stat = istat)
   if(istat .ne. 0) then
     write(6, *)'Error allocating work'
     stop
   endif
-
-  call dsygv(1, 'v', 'l', n, a, n, b, n, eigenval, work, lwork, info)
+  call dsygv(1, 'v', 'l', n, a, n, b, n, eigenval_cpu, work, lwork, info)
   lwork = work(1)
   deallocate(work, stat = istat)
   if(istat .ne. 0) then
@@ -66,10 +104,46 @@ program la_libs_tester
     stop
   endif
 
-  call dsygv(1, 'v', 'l', n, a, n, b, n, eigenval, work, lwork, info)
+  call dsygv(1, 'v', 'l', n, a, n, b, n, eigenval_cpu, work, lwork, info)
 
+  deallocate(work, stat = istat)
+  if(istat .ne. 0) then
+    write(6, *)'Error deallocating work'
+    stop
+  endif
+
+  ! Cmpute eigenvalues/vectors using cuSOLVER
+
+  istat = cusolverDnCreate(cusolver_hndl)
+  if (istat .ne. 0) then
+    write(6, *)'cusolverDnCreate error: ', istat
+    stop
+  endif
+
+  d_devinfo_ptr = c_devloc(d_devinfo)
+  d_devinfo = 0
+
+  istat = cusolverDnDsygvd_bufferSize(cusolver_hndl, 1, 1, 1, n, d_a, n, &
+    d_b, n, d_eigenval, lwork)
+  if (istat .ne. 0) then
+    write(6, *)'cusolverDnDsygvd_bufferSize error: ', istat
+    stop
+  endif
+
+  allocate(d_work(lwork), stat = istat)
+  if(istat .ne. 0) then
+    write(6, *)'Error allocating d_work'
+  endif
+
+  istat = cusolverDnDsygvd(cusolver_hndl, 1, 1, 1, n, d_a, n, &
+    d_b, n, d_eigenval, d_work, lwork, d_devinfo_ptr)
+
+  eigenval_gpu = d_eigenval
+
+  write(6, fmt='(4(a36))')'cpu','gpu','diff (cpu - gpu)', 'rel error (abs(cpu - gpu)/abs(cpu))'
   do i = 1, n
-    write(6, fmt = '(g25.16)')eigenval(i)
+    write(6, fmt = '(2(g36.16), 2(g25.3))')eigenval_cpu(i), eigenval_gpu(i), eigenval_cpu(i) - eigenval_gpu(i), &
+      abs(eigenval_cpu(i) - eigenval_gpu(i))/abs(eigenval_cpu(i))
   enddo
   
 
